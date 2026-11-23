@@ -4,14 +4,17 @@ export default function ChatLayout() {
   return (
     <Stack>
       <Stack.Screen
-        options={{
-          headerShown: false,
-          title: 'UsTwo',
-        }}
-      >
-        <Stack.Screen name="(chat)/index" />
-        <Stack.Screen name="(chat)/memories" />
-      </Stack.Screen>
+        name="(chat)/index"
+        options={{ headerShown: false, title: 'UsTwo' }}
+      />
+      <Stack.Screen
+        name="(chat)/memories"
+        options={{ headerShown: false, title: 'Memories' }}
+      />
+      <Stack.Screen
+        name="(chat)/settings"
+        options={{ headerShown: false, title: 'Settings' }}
+      />
     </Stack>
   );
 }

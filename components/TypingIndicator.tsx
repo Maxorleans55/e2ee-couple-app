@@ -1,22 +1,38 @@
 import React, { useEffect, useRef } from 'react';
 import { View, StyleSheet, Animated } from 'react-native';
+import { theme } from '@/lib/theme';
 
-export function TypingIndicator() {
+export type TypingIndicatorColors = {
+  textMuted: string;
+};
+
+export function TypingIndicator({ colors }: { colors: TypingIndicatorColors }) {
   const dot1 = useRef(new Animated.Value(0)).current;
   const dot2 = useRef(new Animated.Value(0)).current;
   const dot3 = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    Animated.sequence([
-      Animated.delay(0, Animated.timing(dot1, { toValue: 1, duration: 400, useNativeDriver: true })),
-      Animated.delay(200, Animated.timing(dot2, { toValue: 1, duration: 400, useNativeDriver: true })),
-      Animated.delay(400, Animated.timing(dot3, { toValue: 1, duration: 400, useNativeDriver: true })),
-      Animated.delay(600, Animated.timing(dot1, { toValue: 0, duration: 400, useNativeDriver: true })),
-      Animated.delay(800, Animated.timing(dot2, { toValue: 0, duration: 400, useNativeDriver: true })),
-      Animated.delay(1000, Animated.timing(dot3, { toValue: 0, duration: 400, useNativeDriver: true })),
-    ]).start(() => {
-      // loop
-    });
+    const animateDot = (value: Animated.AnimatedValue, delayMs: number) => {
+      setTimeout(() => {
+        Animated.timing(value, {
+          toValue: 1,
+          duration: 400,
+          useNativeDriver: true,
+        }).start(() => {
+          Animated.timing(value, {
+            toValue: 0,
+            duration: 400,
+            useNativeDriver: true,
+          }).start(() => {
+            animateDot(value, delayMs + 1200);
+          });
+        });
+      }, delayMs);
+    };
+
+    animateDot(dot1, 0);
+    animateDot(dot2, 400);
+    animateDot(dot3, 800);
   }, []);
 
   return (

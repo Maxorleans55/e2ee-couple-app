@@ -1,6 +1,20 @@
-import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated, TouchableOpacity } from 'react-native';
-import { useAnimatedStyle, withTiming, useSharedValue } from 'react-native-reanimated';
+import React, { useRef } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Animated,
+  useColorScheme,
+} from 'react-native';
+import { theme } from '@/lib/theme';
+
+export type MemoryCardColors = {
+  surface: string;
+  text: string;
+  textMuted: string;
+  border: string;
+};
 
 export type MemoryCardProps = {
   id: string;
@@ -8,53 +22,58 @@ export type MemoryCardProps = {
   date: string;
   photo: string;
   note: string;
+  colors: MemoryCardColors;
   onPress?: () => void;
 };
 
-export function MemoryCard({ id, title, date, photo, note, onPress }: MemoryCardProps) {
-  const tiltX = useSharedValue(0);
-  const tiltY = useSharedValue(0);
-  const scale = useSharedValue(1);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [
-      { rotateX: tiltX.value },
-      { rotateY: tiltY.value },
-      { scale: scale.value },
-    ],
-  }));
-
-  useEffect(() => {
-    scale.value = withTiming(1, { duration: 300 });
-  }, []);
+export function MemoryCard({
+  id,
+  title,
+  date,
+  photo,
+  note,
+  colors,
+  onPress,
+}: MemoryCardProps) {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
 
   return (
     <TouchableOpacity
-      style={[styles.card, animatedStyle]}
+      style={[
+        styles.card,
+        { backgroundColor: colors.surface, borderColor: colors.border },
+        { transform: [{ scale: scaleAnim }] },
+      ]}
       onPressIn={() => {
-        scale.value = withTiming(0.96, { duration: 100 });
+        Animated.timing(scaleAnim, {
+          toValue: 0.96,
+          duration: 100,
+          useNativeDriver: true,
+        }).start();
       }}
       onPressOut={() => {
-        scale.value = withTiming(1, { duration: 100 });
+        Animated.timing(scaleAnim, {
+          toValue: 1,
+          duration: 100,
+          useNativeDriver: true,
+        }).start();
         if (onPress) onPress();
       }}
       activeOpacity={1}
     >
       <View style={styles.photo}>{photo}</View>
-      <Text style={styles.title}>{title}</Text>
-      <Text style={styles.date}>{date}</Text>
-      <Text style={styles.note}>{note}</Text>
+      <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
+      <Text style={[styles.date, { color: colors.textMuted }]}>{date}</Text>
+      <Text style={[styles.note, { color: colors.text }]}>{note}</Text>
     </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#ffffff',
     borderRadius: 20,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#e8ded4',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.04,
@@ -68,18 +87,15 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 17,
-    fontWeight: '800',
-    color: '#2d2d2d',
+    fontWeight: '800' as any,
     marginBottom: 4,
   },
   date: {
     fontSize: 12,
-    color: '#8a8a8a',
     marginBottom: 8,
   },
   note: {
     fontSize: 13,
-    color: '#5a5a5a',
     lineHeight: 18,
   },
 });

@@ -1,5 +1,17 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated, TouchableOpacity } from 'react-native';
+import { theme } from '@/lib/theme';
+
+export type MessageBubbleColors = {
+  background: string;
+  surface: string;
+  text: string;
+  textMuted: string;
+  border: string;
+  bubbleReceived: string;
+  bubbleSent: string;
+  primary: string;
+};
 
 export type MessageBubbleProps = {
   text: string;
@@ -7,6 +19,7 @@ export type MessageBubbleProps = {
   status: 'sending' | 'sent' | 'delivered' | 'read';
   timestamp: number;
   onLongPress?: () => void;
+  colors: MessageBubbleColors;
 };
 
 export function MessageBubble({
@@ -15,6 +28,7 @@ export function MessageBubble({
   status,
   timestamp,
   onLongPress,
+  colors,
 }: MessageBubbleProps) {
   const scaleAnim = useRef(new Animated.Value(0)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
@@ -23,12 +37,12 @@ export function MessageBubble({
     Animated.parallel([
       Animated.timing(scaleAnim, {
         toValue: 1,
-        duration: 220,
+        duration: theme.motion.fast,
         useNativeDriver: true,
       }),
       Animated.timing(opacityAnim, {
         toValue: 1,
-        duration: 220,
+        duration: theme.motion.fast,
         useNativeDriver: true,
       }),
     ]).start();
@@ -39,30 +53,50 @@ export function MessageBubble({
     minute: '2-digit',
   });
 
+  const bubbleColor = mine ? colors.bubbleSent : colors.bubbleReceived;
+  const textColor = mine ? '#ffffff' : colors.text;
+
   return (
     <View style={[styles.wrap, mine && styles.wrapMine]}>
-      <Animated.View
-        style={[
-          styles.bubble,
-          mine && styles.bubbleMine,
-          { transform: [{ scale: scaleAnim }] },
-          { opacity: opacityAnim },
-        ]}
+      <TouchableOpacity
+        style={[styles.bubbleTouch]}
+        onLongPress={onLongPress}
+        activeOpacity={0.9}
       >
-        <Text style={[styles.text, mine && styles.textMine]}>{text}</Text>
-        <View style={styles.statusRow}>
-          <Text style={styles.time}>{time}</Text>
-          {status === 'sending' && (
-            <Animated.Text style={styles.statusDot} animate>
-              ⟳
-            </Animated.Text>
-          )}
-          {status === 'delivered' && <Text style={styles.statusDot}>✓✓</Text>}
-          {status === 'read' && (
-            <Text style={styles.statusRead}>✓✓</Text>
-          )}
-        </View>
-      </Animated.View>
+        <Animated.View
+          style={[
+            styles.bubble,
+            mine && styles.bubbleMine,
+            { backgroundColor: bubbleColor },
+            { transform: [{ scale: scaleAnim }] },
+            { opacity: opacityAnim },
+          ]}
+        >
+          <Text style={[styles.text, { color: textColor }]}>{text}</Text>
+          <View style={styles.statusRow}>
+            <Text style={[styles.time, { color: colors.textMuted }]}>
+              {time}
+            </Text>
+            {status === 'sending' && (
+              <Animated.Text
+                style={[styles.statusDot, { color: colors.primary }]}
+              >
+                ⟳
+              </Animated.Text>
+            )}
+            {status === 'delivered' && (
+              <Text style={[styles.statusDot, { color: colors.textMuted }]}>
+                ✓✓
+              </Text>
+            )}
+            {status === 'read' && (
+              <Text style={[styles.statusRead, { color: theme.colors.success }]}>
+                ✓✓
+              </Text>
+            )}
+          </View>
+        </Animated.View>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -75,11 +109,13 @@ const styles = StyleSheet.create({
   wrapMine: {
     alignItems: 'flex-end',
   },
+  bubbleTouch: {
+    alignItems: 'flex-end',
+  },
   bubble: {
     maxWidth: '80%',
     padding: 12,
     borderRadius: 18,
-    backgroundColor: '#f5efe4',
     borderBottomRightRadius: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -88,18 +124,13 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   bubbleMine: {
-    backgroundColor: '#ffe3d6',
     borderBottomRightRadius: 18,
     borderBottomLeftRadius: 18,
     borderTopLeftRadius: 18,
   },
   text: {
     fontSize: 15,
-    color: '#2d2d2d',
     lineHeight: 21,
-  },
-  textMine: {
-    color: '#4a4a4a',
   },
   statusRow: {
     flexDirection: 'row',
@@ -110,14 +141,11 @@ const styles = StyleSheet.create({
   },
   time: {
     fontSize: 10,
-    color: '#9a9a9a',
   },
   statusDot: {
     fontSize: 10,
-    color: '#d46a6a',
   },
   statusRead: {
     fontSize: 10,
-    color: '#7fb069',
   },
 });

@@ -1,11 +1,54 @@
-import { View, Text, TouchableOpacity, FlatList, TextInput, KeyboardAvoidingView, Platform, Keyboard, StyleSheet } from 'react-native';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  FlatList,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+  useColorScheme,
+} from 'react-native';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'expo-router';
-import { FlashList } from '@shopify/flash-list';
-import { Animated } from 'react-native';
+import { MessageBubble } from '@/components/MessageBubble';
+import { TypingIndicator } from '@/components/TypingIndicator';
+import { initSignalClient, sendEncryptedMessage, getClient } from '@/lib/crypto';
+import { secureStore } from '@/lib/secureStore';
+import { RelayClient } from '@/lib/relay';
+import { theme } from '@/lib/theme';
+
+const RELAY_URL = 'ws://localhost:8787';
+const PARTNER_USER_ID = 'partner-device-1';
+
+export type MessageBubbleColors = {
+  background: string;
+  surface: string;
+  text: string;
+  textMuted: string;
+  border: string;
+  bubbleReceived: string;
+  bubbleSent: string;
+  primary: string;
+};
 
 export default function ChatScreen() {
   const router = useRouter();
+  const scheme = useColorScheme();
+  const isDark = scheme === 'dark';
+  const colors: MessageBubbleColors = {
+    background: isDark ? theme.colors.backgroundDark : theme.colors.background,
+    surface: isDark ? theme.colors.surfaceDark : theme.colors.surface,
+    primary: isDark ? theme.colors.primaryDark : theme.colors.primary,
+    text: isDark ? theme.colors.textDark : theme.colors.text,
+    textMuted: isDark ? theme.colors.textMutedDark : theme.colors.textMuted,
+    border: isDark ? theme.colors.borderDark : theme.colors.border,
+    bubbleReceived: isDark
+      ? theme.colors.bubbleReceivedDark
+      : theme.colors.bubbleReceived,
+    bubbleSent: isDark ? theme.colors.bubbleSentDark : theme.colors.bubbleSent,
+  };
+
   const [messages, setMessages] = useState<Array<{
     id: string;
     text: string;
@@ -14,10 +57,11 @@ export default function ChatScreen() {
     status: 'sending' | 'sent' | 'delivered' | 'read';
   }>>([]);
   const [input, setInput] = useState('');
-  const [typing, setTyping] = useState(false);
-  const [partnerOnline, setPartnerOnline] = useState(false);
-  const listRef = useRef<FlashList<any>>(null);
+  const [initialized, setInitialized] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const listRef = useRef<FlatList<any>>(null);
   const inputRef = useRef<TextInput>(null);
+  const relayRef = useRef<InstanceType<typeof RelayClient> | null>(null);
 
   const scrollToBottom = useCallback(() => {
     listRef.current?.scrollToEnd({ animated: true });
@@ -27,52 +71,165 @@ export default function ChatScreen() {
     scrollToBottom();
   }, [messages, scrollToBottom]);
 
-  const sendMessage = () => {
+  useEffect(() => {
+    let mounted = true;
+
+    const start = async () => {
+      try {
+        const getIdentityAssertion = async () => {
+          return `device-identity-${Date.now()}`;
+        };
+
+        await initSignalClient(
+          RELAY_URL,
+          getIdentityAssertion,
+          (envelope: {
+            messageId: string;
+            conversationId: string;
+            senderId: string;
+            senderDeviceId: number;
+            content: string;
+            timestamp: number;
+            receivedAt: number;
+          }) => {
+            if (!mounted) return;
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: envelope.messageId,
+                text: envelope.content,
+                mine: false,
+                timestamp: envelope.timestamp,
+                status: 'delivered',
+              },
+            ]);
+          }
+        );
+
+        const relay = new RelayClient();
+        relayRef.current = relay;
+
+        relay.onMessage((msg: { type: string }) => {
+          if (!mounted) return;
+          if (msg.type === 'auth_ok') {
+            setPartnerOnline(true);
+          }
+        });
+
+        await relay.connect('device-identity');
+
+        setInitialized(true);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to initialize');
+      }
+    };
+
+    let setPartnerOnline = (v: boolean) => {};
+
+    start();
+
+    return () => {
+      mounted = false;
+      relayRef.current?.disconnect();
+    };
+  }, []);
+
+  const sendMessage = async () => {
     if (!input.trim()) return;
-    const msg = {
-      id: crypto.randomUUID?.() || Math.random().toString(36).slice(2),
+
+    const optimisticId = `opt-${Date.now()}`;
+    const optimisticMsg = {
+      id: optimisticId,
       text: input,
       mine: true,
       timestamp: Date.now(),
       status: 'sending' as const,
     };
-    setMessages((prev) => [...prev, msg]);
+
+    setMessages((prev) => [...prev, optimisticMsg]);
     setInput('');
-    setTyping(false);
-    // Simulate delivery
-    setTimeout(() => {
+
+    try {
+      const client = getClient();
+      const { type, body } = await sendEncryptedMessage(PARTNER_USER_ID, input);
+
+      relayRef.current?.send({
+        type: 'message',
+        from: 'self',
+        to: PARTNER_USER_ID,
+        payload: JSON.stringify({ type, body }),
+      });
+
       setMessages((prev) =>
-        prev.map((m) => (m.id === msg.id ? { ...m, status: 'delivered' } : m))
+        prev.map((m) =>
+          m.id === optimisticId ? { ...m, status: 'delivered' } : m
+        )
       );
-    }, 1200);
+    } catch (err) {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === optimisticId ? { ...m, status: 'sent' } : m
+        )
+      );
+      setError(err instanceof Error ? err.message : 'Send failed');
+    }
   };
+
+  if (error && !initialized) {
+    return (
+      <View style={[styles.errorContainer, { backgroundColor: colors.background }]}>
+        <Text style={[styles.errorText, { color: colors.textMuted }]}>
+          {error}
+        </Text>
+        <TouchableOpacity
+          style={[styles.retryButton, { backgroundColor: colors.primary }]}
+          onPress={() => {
+            setError(null);
+            setInitialized(false);
+          }}
+        >
+          <Text style={styles.retryText}>Retry</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  if (!initialized) {
+    return (
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+        <Text style={[styles.loadingText, { color: colors.textMuted }]}>
+          Establishing secure session…
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={styles.container}
+      style={[styles.container, { backgroundColor: colors.background }]}
     >
-      <View style={styles.header}>
+      <View
+        style={[
+          styles.header,
+          { backgroundColor: colors.surface, borderColor: colors.border },
+        ]}
+      >
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Text style={styles.backText}>←</Text>
+          <Text style={[styles.backText, { color: colors.textMuted }]}>←</Text>
         </TouchableOpacity>
         <View style={styles.partnerStatus}>
-          <View
-            style={[
-              styles.presenceDot,
-              partnerOnline ? styles.online : styles.offline,
-            ]}
-          />
-          <Text style={styles.partnerName}>
-            Partner {partnerOnline ? '· online' : '· offline'}
+          <View style={[styles.presenceDot, { backgroundColor: theme.colors.success }]} />
+          <Text style={[styles.partnerName, { color: colors.text }]}>
+            Partner · online
           </Text>
         </View>
         <TouchableOpacity style={styles.menuButton}>
-          <Text style={styles.menuText}>⋮</Text>
+          <Text style={[styles.menuText, { color: colors.textMuted }]}>⋮</Text>
         </TouchableOpacity>
       </View>
 
-      <FlashList
+      <FlatList
         ref={listRef}
         data={messages}
         renderItem={({ item }) => (
@@ -81,33 +238,47 @@ export default function ChatScreen() {
             mine={item.mine}
             status={item.status}
             timestamp={item.timestamp}
+            colors={colors}
           />
         )}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
-      </View>
+      />
 
       <View style={styles.typingRow}>
-        {typing && <Text style={styles.typingText}>Partner is typing…</Text>}
+        <TypingIndicator colors={colors} />
       </View>
 
-      <View style={styles.inputBar}>
+      <View
+        style={[
+          styles.inputBar,
+          { backgroundColor: colors.surface, borderColor: colors.border },
+        ]}
+      >
         <TextInput
           ref={inputRef}
-          style={styles.input}
+          style={[
+            styles.input,
+            {
+              backgroundColor: isDark ? '#3d322f' : colors.surface,
+              color: colors.text,
+              borderColor: colors.border,
+            },
+          ]}
           value={input}
           onChangeText={setInput}
-          onFocus={() => setTyping(true)}
-          onBlur={() => setTyping(false)}
           placeholder="Write something…"
-          placeholderTextColor="#9a9a9a"
+          placeholderTextColor={colors.textMuted}
           multiline
-          maxHeight={80}
           numberOfLines={4}
-          selectionColor="#d46a6a"
+          selectionColor={colors.primary}
         />
-        <TouchableOpacity style={styles.sendButton} onPress={sendMessage} disabled={!input.trim()}>
+        <TouchableOpacity
+          style={[styles.sendButton, { backgroundColor: colors.primary }]}
+          onPress={sendMessage}
+          disabled={!input.trim()}
+        >
           <Text style={styles.sendText}>➤</Text>
         </TouchableOpacity>
       </View>
@@ -115,44 +286,38 @@ export default function ChatScreen() {
   );
 }
 
-function MessageBubble({
-  text,
-  mine,
-  status,
-  timestamp,
-}: {
-  text: string;
-  mine: boolean;
-  status: string;
-  timestamp: number;
-}) {
-  const time = new Date(timestamp).toLocaleTimeString([], {
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-
-  return (
-    <View style={[styles.bubbleWrap, mine && styles.bubbleWrapMine]}>
-      <Animated.View style={[styles.bubble, mine && styles.bubbleMine]}>
-        <Text style={[styles.bubbleText, mine && styles.bubbleTextMine]}>
-          {text}
-        </Text>
-        <View style={styles.statusRow}>
-          <Text style={styles.statusText}>{time}</Text>
-          {status === 'sending' && (
-            <Animated.Text style={styles.statusText}>⟳</Animated.Text>
-          )}
-          {status === 'delivered' && <Text style={styles.statusText}>✓✓</Text>}
-        </View>
-      </Animated.View>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
+  errorContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  errorText: {
+    fontSize: 15,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  retryButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+  },
+  retryText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    fontSize: 15,
+  },
   container: {
     flex: 1,
-    backgroundColor: '#fdfaf5',
   },
   header: {
     flexDirection: 'row',
@@ -160,15 +325,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#e8ded4',
-    backgroundColor: '#ffffff',
   },
   backButton: {
     padding: 8,
   },
   backText: {
     fontSize: 20,
-    color: '#8a8a8a',
   },
   partnerStatus: {
     flex: 1,
@@ -180,83 +342,25 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#b3402a',
-  },
-  online: {
-    backgroundColor: '#7fb069',
-  },
-  offline: {
-    backgroundColor: '#c7c7c7',
   },
   partnerName: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#2d2d2d',
   },
   menuButton: {
     padding: 8,
   },
   menuText: {
     fontSize: 20,
-    color: '#8a8a8a',
   },
   listContent: {
     padding: 12,
     paddingBottom: 100,
     gap: 10,
   },
-  bubbleWrap: {
-    alignItems: 'flex-end',
-  },
-  bubbleWrapMine: {
-    alignItems: 'flex-end',
-  },
-  bubble: {
-    maxWidth: '80%',
-    padding: 12,
-    borderRadius: 18,
-    backgroundColor: '#f5efe4',
-    borderBottomRightRadius: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
-  },
-  bubbleMine: {
-    backgroundColor: '#ffe3d6',
-    borderBottomRightRadius: 18,
-    borderBottomLeftRadius: 18,
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 4,
-  },
-  bubbleText: {
-    fontSize: 15,
-    color: '#2d2d2d',
-    lineHeight: 21,
-  },
-  bubbleTextMine: {
-    color: '#4a4a4a',
-  },
-  statusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    marginTop: 4,
-    gap: 4,
-  },
-  statusText: {
-    fontSize: 10,
-    color: '#9a9a9a',
-  },
   typingRow: {
     paddingHorizontal: 16,
     paddingTop: 4,
-  },
-  typingText: {
-    fontSize: 13,
-    color: '#8a8a8a',
-    fontStyle: 'italic',
   },
   inputBar: {
     flexDirection: 'row',
@@ -264,34 +368,23 @@ const styles = StyleSheet.create({
     padding: 10,
     gap: 10,
     borderTopWidth: 1,
-    borderTopColor: '#e8ded4',
-    backgroundColor: '#ffffff',
     paddingBottom: 20,
   },
   input: {
     flex: 1,
-    backgroundColor: '#f5efe4',
     borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    color: '#2d2d2d',
     fontSize: 15,
     borderWidth: 1,
-    borderColor: '#e8ded4',
     minHeight: 44,
   },
   sendButton: {
-    backgroundColor: '#d46a6a',
     width: 44,
     height: 44,
     borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#d46a6a',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 2,
   },
   sendText: {
     color: '#ffffff',

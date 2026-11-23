@@ -54,7 +54,7 @@ function MemoryCard({ memory }: { memory: { id: string; title: string; date: str
   return (
     <TouchableOpacity style={styles.card} activeOpacity={0.85}>
       <View style={styles.photo}>{memory.photo}</View>
-      <Text style={styles.title}>{memory.title}</Text>
+      <Text style={styles.cardTitle}>{memory.title}</Text>
       <Text style={styles.date}>{memory.date}</Text>
       <Text style={styles.note}>{memory.note}</Text>
     </TouchableOpacity>
@@ -111,7 +111,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 12,
   },
-  title: {
+  cardTitle: {
     fontSize: 17,
     fontWeight: '800',
     color: '#2d2d2d',

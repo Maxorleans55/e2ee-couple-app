@@ -1,11 +1,28 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Animated, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Animated,
+  TouchableOpacity,
+  useColorScheme,
+} from 'react-native';
+import { theme } from '@/lib/theme';
+
+export type SafetyNumberVerifyColors = {
+  background: string;
+  surface: string;
+  text: string;
+  textMuted: string;
+  border: string;
+};
 
 export type SafetyNumberVerifyProps = {
   safetyNumber: string;
   partnerSafetyNumber: string;
   isVerified: boolean;
   onVerify: (confirmed: boolean) => void;
+  colors: SafetyNumberVerifyColors;
 };
 
 export function SafetyNumberVerify({
@@ -13,6 +30,7 @@ export function SafetyNumberVerify({
   partnerSafetyNumber,
   isVerified,
   onVerify,
+  colors,
 }: SafetyNumberVerifyProps) {
   const [matched, setMatched] = useState(false);
   const pulseAnim = useRef(new Animated.Value(0)).current;
@@ -40,20 +58,30 @@ export function SafetyNumberVerify({
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Verify Safety Number</Text>
-      <Text style={styles.subtitle}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <Text style={[styles.title, { color: colors.text }]}>
+        Verify Safety Number
+      </Text>
+      <Text style={[styles.subtitle, { color: colors.textMuted }]}>
         Compare these numbers with your partner in person or over a trusted channel.
       </Text>
 
-      <View style={styles.numberCard}>
-        <Text style={styles.label}>Your safety number</Text>
-        <Text style={styles.number}>{formattedMine}</Text>
+      <View style={[styles.numberCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <Text style={[styles.label, { color: colors.textMuted }]}>
+          Your safety number
+        </Text>
+        <Text style={[styles.number, { color: colors.text }]}>
+          {formattedMine}
+        </Text>
       </View>
 
-      <View style={styles.numberCard}>
-        <Text style={styles.label}>Partner&rsquo;s safety number</Text>
-        <Text style={styles.number}>{formattedTheirs}</Text>
+      <View style={[styles.numberCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <Text style={[styles.label, { color: colors.textMuted }]}>
+          Partner&rsquo;s safety number
+        </Text>
+        <Text style={[styles.number, { color: colors.text }]}>
+          {formattedTheirs}
+        </Text>
       </View>
 
       <View style={styles.matchIndicator}>
@@ -73,20 +101,28 @@ export function SafetyNumberVerify({
 
       <View style={styles.buttonRow}>
         <TouchableOpacity
-          style={[styles.button, styles.buttonConfirm]}
+          style={[
+            styles.button,
+            styles.buttonConfirm,
+            { backgroundColor: matched ? theme.colors.success : '#c7c7c7' },
+          ]}
           disabled={!matched}
           onPress={confirm}
         >
           <Text style={styles.buttonText}>I confirm they match</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.buttonCancel} onPress={reject}>
-          <Text style={styles.buttonTextCancel}>These don&rsquo;t match</Text>
+          <Text style={[styles.buttonTextCancel, { color: colors.textMuted }]}>
+            These don&rsquo;t match
+          </Text>
         </TouchableOpacity>
       </View>
 
       {isVerified && (
-        <View style={styles.verifiedBanner}>
-          <Text style={styles.verifiedText}>✓ Identity verified — E2EE session locked</Text>
+        <View style={[styles.verifiedBanner, { backgroundColor: '#1b4332', borderColor: '#2d6a4f' }]}>
+          <Text style={[styles.verifiedText, { color: '#a7dba4' }]}>
+            ✓ Identity verified — E2EE session locked
+          </Text>
         </View>
       )}
     </View>
@@ -96,33 +132,27 @@ export function SafetyNumberVerify({
 const styles = StyleSheet.create({
   container: {
     padding: 24,
-    backgroundColor: '#fdfaf5',
   },
   title: {
     fontSize: 24,
     fontWeight: '800',
-    color: '#2d2d2d',
     textAlign: 'center',
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 14,
-    color: '#6b6b6b',
     textAlign: 'center',
     marginBottom: 24,
     lineHeight: 20,
   },
   numberCard: {
-    backgroundColor: '#ffffff',
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#e8ded4',
   },
   label: {
     fontSize: 11,
-    color: '#8a8a8a',
     textTransform: 'uppercase',
     letterSpacing: 1,
     marginBottom: 8,
@@ -130,7 +160,6 @@ const styles = StyleSheet.create({
   number: {
     fontSize: 13,
     fontFamily: 'monospace',
-    color: '#2d2d2d',
     letterSpacing: 0.5,
   },
   matchIndicator: {
@@ -143,16 +172,14 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#7fb069',
+    backgroundColor: theme.colors.success,
   },
   matchText: {
     fontSize: 14,
-    color: '#7fb069',
     fontWeight: '700',
   },
   pendingText: {
     fontSize: 14,
-    color: '#8a8a8a',
   },
   buttonRow: {
     flexDirection: 'row',
@@ -164,9 +191,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: 'center',
   },
-  buttonConfirm: {
-    backgroundColor: matched ? '#7fb069' : '#c7c7c7',
-  },
+  buttonConfirm: {},
   buttonCancel: {
     backgroundColor: 'transparent',
     borderWidth: 1,
@@ -178,21 +203,17 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   buttonTextCancel: {
-    color: '#8a8a8a',
     fontSize: 14,
     fontWeight: '600',
   },
   verifiedBanner: {
     marginTop: 16,
-    backgroundColor: '#e8f5e9',
     borderRadius: 12,
     padding: 12,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#c8e6c9',
   },
   verifiedText: {
-    color: '#2e7d32',
     fontSize: 13,
     fontWeight: '700',
   },
