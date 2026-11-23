@@ -1,13 +1,25 @@
-import { createHostedSignalProtocolClient } from '@open-e2ee/signal-protocol-sdk';
+import {
+  createHostedSignalProtocolClient,
+  keys,
+  type SafetyNumber,
+  type DefaultSignalProtocolClient,
+} from '@open-e2ee/signal-protocol-sdk';
 import { expoStore } from '@open-e2ee/signal-protocol-sdk/local/store/expo';
 import 'react-native-get-random-values';
-import { secureStore, KEYS_STORAGE_KEY, IdentityKeys } from './secureStore';
+import {
+  secureStore,
+  KEYS_STORAGE_KEY,
+  type IdentityKeys,
+} from './secureStore';
+import type { IncomingEnvelope, ReceiveOutcome } from '@open-e2ee/signal-protocol-sdk';
+
+let signalClient: DefaultSignalProtocolClient | null = null;
 
 export interface CryptoClient {
-  sendEncryptedMessage(recipientUserId: string, plaintext: string): Promise<{
-    type: string;
-    body: string;
-  }>;
+  sendEncryptedMessage(
+    recipientUserId: string,
+    plaintext: string
+  ): Promise<{ type: string; body: string }>;
   decryptIncomingMessage(
     senderUserId: string,
     type: string,
@@ -15,25 +27,40 @@ export interface CryptoClient {
   ): Promise<string>;
   registerIdentity(): Promise<IdentityKeys>;
   getSafetyNumber(peerUserId: string): Promise<string>;
+  confirmSafetyNumber(confirmation: unknown): Promise<void>;
 }
 
-let signalClient: ReturnType<typeof createHostedSignalProtocolClient> | null =
-  null;
-
-export async function getSignalClient(
+export async function initSignalClient(
   relayUrl: string,
-  getIdentityAssertion: () => Promise<string>
-): Promise<ReturnType<typeof createHostedSignalProtocolClient>> {
+  getIdentityAssertion: () => Promise<string>,
+  onMessageDecrypted: (envelope: {
+    messageId: string;
+    conversationId: string;
+    senderId: string;
+    senderDeviceId: number;
+    content: string;
+    timestamp: number;
+    receivedAt: number;
+  }) => void
+): Promise<DefaultSignalProtocolClient> {
   if (signalClient) return signalClient;
 
   const storage = await expoStore();
-  signalClient = createHostedSignalProtocolClient({
+  signalClient = await createHostedSignalProtocolClient({
     hosted: { relayUrl, getIdentityAssertion },
     adapters: { storage },
   });
 
   signalClient.registerHook('onMessageDecrypted', (envelope) => {
-    // Handled by the caller via decryptIncomingMessage
+    onMessageDecrypted({
+      messageId: envelope.messageId,
+      conversationId: envelope.conversationId,
+      senderId: envelope.senderId,
+      senderDeviceId: envelope.senderDeviceId,
+      content: envelope.content,
+      timestamp: envelope.timestamp,
+      receivedAt: envelope.receivedAt,
+    });
   });
 
   signalClient.startRelaySubscription();
@@ -41,49 +68,77 @@ export async function getSignalClient(
   return signalClient;
 }
 
-export async function registerIdentity(
-  relayUrl: string,
-  getIdentityAssertion: () => Promise<string>
-): Promise<IdentityKeys> {
-  const client = await getSignalClient(relayUrl, getIdentityAssertion);
+export function getClient(): DefaultSignalProtocolClient {
+  if (!signalClient) {
+    throw new Error('Signal client not initialized. Call initSignalClient first.');
+  }
+  return signalClient;
+}
 
+export async function registerIdentity(): Promise<IdentityKeys> {
   const existing = await secureStore.get(KEYS_STORAGE_KEY);
   if (existing) {
     return JSON.parse(existing) as IdentityKeys;
   }
 
-  const identityKey = await client.register();
-  const keys: IdentityKeys = {
-    identityPublicKey: identityKey.publicKey.toString('base64'),
-    identityPrivateKey: identityKey.privateKey.toString('base64'),
-    registrationId: identityKey.registrationId,
+  const keyPair = await keys.generateIdentityKeyPair();
+  const keysObj: IdentityKeys = {
+    identityPublicKey: keyPair.dhKey.publicKey,
+    identityPrivateKey: keyPair.dhKey.privateKey,
+    registrationId: keyPair.registrationId,
   };
 
-  await secureStore.set(KEYS_STORAGE_KEY, JSON.stringify(keys));
+  await secureStore.set(KEYS_STORAGE_KEY, JSON.stringify(keysObj));
 
-  return keys;
+  return keysObj;
 }
 
 export async function sendEncryptedMessage(
-  client: ReturnType<typeof createHostedSignalProtocolClient>,
   recipientUserId: string,
   plaintext: string
-) {
-  return client.send(recipientUserId, plaintext);
+): Promise<{ type: string; body: string }> {
+  const client = getClient();
+  const result = await client.send(recipientUserId, plaintext);
+  return {
+    type: 'ciphertext',
+    body: result.clientMessageId,
+  };
 }
 
 export async function decryptIncomingMessage(
-  client: ReturnType<typeof createHostedSignalProtocolClient>,
   senderUserId: string,
   type: string,
   body: string
 ): Promise<string> {
-  return client.decrypt(senderUserId, type, body);
+  const client = getClient();
+  const envelope: IncomingEnvelope = {
+    id: body,
+    senderUserId,
+    senderDeviceId: 1,
+    ciphertext: body,
+    timestamp: Date.now(),
+    messageType: type,
+  };
+  const outcome: ReceiveOutcome = await client.processIncomingEnvelope(envelope);
+
+  if (outcome.kind === 'processed') {
+    return outcome.plaintext;
+  }
+
+  throw new Error(`Failed to decrypt message: ${outcome.kind}`);
 }
 
 export async function getSafetyNumber(
-  client: ReturnType<typeof createHostedSignalProtocolClient>,
   peerUserId: string
 ): Promise<string> {
-  return client.getSafetyNumber(peerUserId);
+  const client = getClient();
+  const safetyNumber: SafetyNumber = await client.verify(peerUserId);
+  return safetyNumber.numeric;
+}
+
+export async function confirmSafetyNumber(
+  confirmation: unknown
+): Promise<void> {
+  const client = getClient();
+  await client.confirmSafetyNumber(confirmation as any);
 }

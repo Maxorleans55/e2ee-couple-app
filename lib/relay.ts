@@ -58,7 +58,7 @@ export class RelayClient {
         };
 
         this.ws.onerror = (err) => {
-          if (this.rejectConnect) this.rejectConnect(err as Error);
+          if (this.rejectConnect) this.rejectConnect(err as unknown as Error);
         };
 
         this.ws.onclose = () => {

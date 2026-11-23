@@ -1,14 +1,22 @@
 import { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator, KeyboardAvoidingView } from 'react-native';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import { secureStore, KEYS_STORAGE_KEY } from '@/lib/secureStore';
-import { getSignalClient } from '@/lib/crypto';
+import { initSignalClient } from '@/lib/crypto';
 
 const RELAY_URL = 'ws://localhost:8787';
 
 export default function SetupScreen() {
   const router = useRouter();
-  const [status, setStatus] = useState<'idle' | 'generating' | 'ready' | 'error'>('idle');
+  const [status, setStatus] = useState<
+    'idle' | 'generating' | 'ready' | 'error'
+  >('idle');
   const [error, setError] = useState<string | null>(null);
   const [publicKey, setPublicKey] = useState<string | null>(null);
 
@@ -30,8 +38,9 @@ export default function SetupScreen() {
       const getIdentityAssertion = async () => {
         return `device-identity-${Date.now()}`;
       };
-      const keys = await getSignalClient(RELAY_URL, getIdentityAssertion);
-      // registerIdentity is handled internally; we just need the client initialized
+      await initSignalClient(RELAY_URL, getIdentityAssertion, () => {
+        // Handled by chat screen via relay
+      });
       const existing = await secureStore.get(KEYS_STORAGE_KEY);
       if (existing) {
         const parsed = JSON.parse(existing);
@@ -50,43 +59,52 @@ export default function SetupScreen() {
 
   if (status === 'generating') {
     return (
-      <View style={styles.container}>
+      <View style={styles.container as any}>
         <ActivityIndicator size="large" color="#d46a6a" />
-        <Text style={styles.loadingText}>Generating your identity keys…</Text>
+        <Text style={styles.loadingText as any}>
+          Generating your identity keys…
+        </Text>
       </View>
     );
   }
 
   return (
-    <KeyboardAvoidingView behavior="padding" style={styles.container}>
-      <View style={styles.card}>
-        <Text style={styles.title}>Us<span style={styles.accent}>Two</span></Text>
-        <Text style={styles.subtitle}>
+    <KeyboardAvoidingView behavior="padding" style={styles.container as any}>
+      <View style={styles.card as any}>
+        <Text style={styles.title as any}>
+          Us<span style={styles.accent as any}>Two</span>
+        </Text>
+        <Text style={styles.subtitle as any}>
           End-to-end encrypted. Just the two of you.
         </Text>
         {status === 'idle' && (
           <TouchableOpacity
-            style={styles.button}
+            style={styles.button as any}
             onPress={generateKeys}
-            disabled={status === 'generating'}
           >
-            <Text style={styles.buttonText}>Set Up My Identity</Text>
+            <Text style={styles.buttonText as any}>Set Up My Identity</Text>
           </TouchableOpacity>
         )}
         {status === 'ready' && publicKey && (
-          <View style={styles.keyPanel}>
-            <Text style={styles.keyLabel}>Your identity public key</Text>
-            <Text style={styles.keyValue}>{publicKey.slice(0, 24)}…</Text>
-            <TouchableOpacity style={styles.pairButton} onPress={continueToChat}>
-              <Text style={styles.pairButtonText}>I&rsquo;ve paired with my partner</Text>
+          <View style={styles.keyPanel as any}>
+            <Text style={styles.keyLabel as any}>
+              Your identity public key
+            </Text>
+            <Text style={styles.keyValue as any}>
+              {publicKey.slice(0, 24)}…
+            </Text>
+            <TouchableOpacity style={styles.pairButton as any} onPress={continueToChat}>
+              <Text style={styles.pairButtonText as any}>
+                I&rsquo;ve paired with my partner
+              </Text>
             </TouchableOpacity>
           </View>
         )}
         {status === 'error' && error && (
-          <View style={styles.errorPanel}>
-            <Text style={styles.errorText}>{error}</Text>
-            <TouchableOpacity style={styles.retryButton} onPress={generateKeys}>
-              <Text style={styles.retryText}>Try again</Text>
+          <View style={styles.errorPanel as any}>
+            <Text style={styles.errorText as any}>{error}</Text>
+            <TouchableOpacity style={styles.retryButton as any} onPress={generateKeys}>
+              <Text style={styles.retryText as any}>Try again</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -95,7 +113,7 @@ export default function SetupScreen() {
   );
 }
 
-const styles = {
+const styles: Record<string, any> = {
   container: {
     flex: 1,
     backgroundColor: '#fdfaf5',
@@ -119,9 +137,9 @@ const styles = {
   },
   title: {
     fontSize: 34,
-    fontWeight: '800',
+    fontWeight: '800' as any,
     color: '#2d2d2d',
-    textAlign: 'center',
+    textAlign: 'center' as any,
     marginBottom: 4,
     letterSpacing: -0.5,
   },
@@ -131,7 +149,7 @@ const styles = {
   subtitle: {
     fontSize: 15,
     color: '#6b6b6b',
-    textAlign: 'center',
+    textAlign: 'center' as any,
     marginBottom: 32,
     lineHeight: 22,
   },
@@ -144,7 +162,7 @@ const styles = {
     backgroundColor: '#d46a6a',
     paddingVertical: 16,
     borderRadius: 14,
-    alignItems: 'center',
+    alignItems: 'center' as any,
     marginBottom: 20,
     shadowColor: '#d46a6a',
     shadowOffset: { width: 0, height: 4 },
@@ -155,7 +173,7 @@ const styles = {
   buttonText: {
     color: '#ffffff',
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '700' as any,
     letterSpacing: 0.5,
   },
   keyPanel: {
@@ -169,7 +187,7 @@ const styles = {
   keyLabel: {
     fontSize: 12,
     color: '#8a8a8a',
-    textTransform: 'uppercase',
+    textTransform: 'uppercase' as any,
     letterSpacing: 1,
     marginBottom: 8,
   },
@@ -183,14 +201,14 @@ const styles = {
     backgroundColor: '#f5efe4',
     paddingVertical: 14,
     borderRadius: 14,
-    alignItems: 'center',
+    alignItems: 'center' as any,
     borderWidth: 1,
     borderColor: '#d4c9b8',
   },
   pairButtonText: {
     color: '#d46a6a',
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '700' as any,
   },
   errorPanel: {
     marginTop: 16,
@@ -209,11 +227,11 @@ const styles = {
     backgroundColor: '#b3402a',
     paddingVertical: 10,
     borderRadius: 10,
-    alignItems: 'center',
+    alignItems: 'center' as any,
   },
   retryText: {
     color: '#ffffff',
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '600' as any,
   },
 };

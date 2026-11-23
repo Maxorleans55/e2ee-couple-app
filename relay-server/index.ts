@@ -13,7 +13,7 @@ type AllowList = {
   }>;
 };
 
-let allowlist: AllowList;
+let allowlist: AllowList = { allowedIdentityKeys: [] };
 
 function loadAllowlist() {
   try {
@@ -51,13 +51,13 @@ function broadcast(
 
 const wss = new WebSocketServer({ port: 8787 });
 
-wss.on('connection', (ws, request) => {
+wss.on('connection', (ws: WebSocket, request: { socket: { remoteAddress?: string | null } }) => {
   const ip = request.socket.remoteAddress;
   console.log(`[relay] connection from ${ip}`);
 
   let authenticated = false;
 
-  ws.on('message', (raw) => {
+  ws.on('message', (raw: Buffer) => {
     let parsed: any;
     try {
       parsed = JSON.parse(raw.toString());
@@ -179,7 +179,7 @@ wss.on('connection', (ws, request) => {
     console.log(`[relay] client disconnected`);
   });
 
-  ws.on('error', (err) => {
+  ws.on('error', (err: Error) => {
     console.error(`[relay] ws error: ${err.message}`);
     clients.delete(ws);
   });
