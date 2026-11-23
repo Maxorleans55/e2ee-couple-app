@@ -1,0 +1,16 @@
+{
+  "allowedIdentityKeys": [
+    {
+      "publicKey": "PLACEHOLDER_ALICE_PUBLIC_KEY_BASE64",
+      "name": "Alice",
+      "deviceId": "alice-device-1",
+      "addedAt": "2026-01-01T00:00:00Z"
+    },
+    {
+      "publicKey": "PLACEHOLDER_BOB_PUBLIC_KEY_BASE64",
+      "name": "Bob",
+      "deviceId": "bob-device-1",
+      "addedAt": "2026-01-01T00:00:00Z"
+    }
+  ]
+}

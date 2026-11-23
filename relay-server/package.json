@@ -1,0 +1,16 @@
+{
+  "name": "e2ee-couple-relay",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node index.ts",
+    "dev": "node --watch index.ts"
+  },
+  "dependencies": {
+    "ws": "^8.18.0",
+    "tweetnacl": "^1.0.3",
+    "@noble/curves": "^1.6.0",
+    "@noble/hashes": "^1.5.0"
+  }
+}

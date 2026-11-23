@@ -1,0 +1,44 @@
+{
+  "expo": {
+    "name": "UsTwo",
+    "slug": "e2ee-couple-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#fdfaf5"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "Uses Face ID to protect your private keys."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#fdfaf5"
+      },
+      "permissions": []
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-secure-store",
+        {
+          "configureAndroidKeyStore": true
+        }
+      ],
+      "react-native-get-random-values"
+    ],
+    "extra": {
+      "e2e": {
+        "allowlistPath": "./relay-server/allowlist.json"
+      }
+    }
+  }
+}
