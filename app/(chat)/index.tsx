@@ -1,8 +1,21 @@
-import { View, Text, TouchableOpacity, FlatList, TextInput, KeyboardAvoidingView, Platform, Keyboard, StyleSheet } from 'react-native';
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { useRouter } from 'expo-router';
-import { FlashList } from '@shopify/flash-list';
-import { Animated } from 'react-native';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  FlatList,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+} from 'react-native';
+import { MessageBubble } from '@/components/MessageBubble';
+import { TypingIndicator } from '@/components/TypingIndicator';
+import { initSignalClient, sendEncryptedMessage, getClient } from '@/lib/crypto';
+import { secureStore } from '@/lib/secureStore';
+import { RelayClient } from '@/lib/relay';
+
+const RELAY_URL = 'ws://localhost:8787';
+const PARTNER_USER_ID = 'partner-device-1';
 
 export default function ChatScreen() {
   const router = useRouter();
@@ -14,10 +27,11 @@ export default function ChatScreen() {
     status: 'sending' | 'sent' | 'delivered' | 'read';
   }>>([]);
   const [input, setInput] = useState('');
-  const [typing, setTyping] = useState(false);
-  const [partnerOnline, setPartnerOnline] = useState(false);
-  const listRef = useRef<FlashList<any>>(null);
+  const [initialized, setInitialized] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const listRef = useRef<FlatList<any>>(null);
   const inputRef = useRef<TextInput>(null);
+  const relayRef = useRef<RelayClient | null>(null);
 
   const scrollToBottom = useCallback(() => {
     listRef.current?.scrollToEnd({ animated: true });
@@ -27,25 +41,135 @@ export default function ChatScreen() {
     scrollToBottom();
   }, [messages, scrollToBottom]);
 
-  const sendMessage = () => {
+  useEffect(() => {
+    let mounted = true;
+
+    const start = async () => {
+      try {
+        const getIdentityAssertion = async () => {
+          return `device-identity-${Date.now()}`;
+        };
+
+        await initSignalClient({
+          relayUrl: RELAY_URL,
+          getIdentityAssertion,
+          onMessage: (envelope) => {
+            if (!mounted) return;
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: envelope.conversationId,
+                text: envelope.content,
+                mine: false,
+                timestamp: envelope.timestamp,
+                status: 'delivered',
+              },
+            ]);
+          },
+        });
+
+        const relay = new RelayClient();
+        relayRef.current = relay;
+
+        relay.onMessage((msg) => {
+          if (!mounted) return;
+          if (msg.type === 'message' && msg.from !== 'self') {
+            // Message will be delivered via Signal Protocol hook
+            console.log('[relay] incoming message envelope');
+          }
+          if (msg.type === 'auth_ok') {
+            setPartnerOnline(true);
+          }
+        });
+
+        relay.onConnect(() => {
+          if (!mounted) return;
+        });
+
+        await relay.connect('device-identity');
+
+        setInitialized(true);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to initialize');
+      }
+    };
+
+    start();
+
+    return () => {
+      mounted = false;
+      relayRef.current?.disconnect();
+    };
+  }, []);
+
+  const sendMessage = async () => {
     if (!input.trim()) return;
-    const msg = {
-      id: crypto.randomUUID?.() || Math.random().toString(36).slice(2),
+
+    const optimisticId = `opt-${Date.now()}`;
+    const optimisticMsg = {
+      id: optimisticId,
       text: input,
       mine: true,
       timestamp: Date.now(),
       status: 'sending' as const,
     };
-    setMessages((prev) => [...prev, msg]);
+
+    setMessages((prev) => [...prev, optimisticMsg]);
     setInput('');
-    setTyping(false);
-    // Simulate delivery
-    setTimeout(() => {
+
+    try {
+      const client = getClient();
+      const { type, body } = await sendEncryptedMessage(PARTNER_USER_ID, input);
+
+      // Send via relay as envelope
+      relayRef.current?.send({
+        type: 'message',
+        from: 'self',
+        to: PARTNER_USER_ID,
+        payload: JSON.stringify({ type, body }),
+      });
+
       setMessages((prev) =>
-        prev.map((m) => (m.id === msg.id ? { ...m, status: 'delivered' } : m))
+        prev.map((m) =>
+          m.id === optimisticId ? { ...m, status: 'delivered' } : m
+        )
       );
-    }, 1200);
+    } catch (err) {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === optimisticId ? { ...m, status: 'sent' } : m
+        )
+      );
+      setError(err instanceof Error ? err.message : 'Send failed');
+    }
   };
+
+  if (error && !initialized) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorText}>{error}</Text>
+        <TouchableOpacity
+          style={styles.retryButton}
+          onPress={() => {
+            setError(null);
+            setInitialized(false);
+          }}
+        >
+          <Text style={styles.retryText}>Retry</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  if (!initialized) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Animated.View style={[styles.pulse, { opacity: 1 }]}>
+          <Text style={styles.loadingText}>Establishing secure session…</Text>
+        </Animated.View>
+      </View>
+    );
+  }
 
   return (
     <KeyboardAvoidingView
@@ -57,14 +181,9 @@ export default function ChatScreen() {
           <Text style={styles.backText}>←</Text>
         </TouchableOpacity>
         <View style={styles.partnerStatus}>
-          <View
-            style={[
-              styles.presenceDot,
-              partnerOnline ? styles.online : styles.offline,
-            ]}
-          />
+          <View style={[styles.presenceDot, styles.online]} />
           <Text style={styles.partnerName}>
-            Partner {partnerOnline ? '· online' : '· offline'}
+            Partner · online
           </Text>
         </View>
         <TouchableOpacity style={styles.menuButton}>
@@ -72,7 +191,7 @@ export default function ChatScreen() {
         </TouchableOpacity>
       </View>
 
-      <FlashList
+      <FlatList
         ref={listRef}
         data={messages}
         renderItem={({ item }) => (
@@ -86,10 +205,10 @@ export default function ChatScreen() {
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
-      </View>
+      </FlatList>
 
       <View style={styles.typingRow}>
-        {typing && <Text style={styles.typingText}>Partner is typing…</Text>}
+        <TypingIndicator />
       </View>
 
       <View style={styles.inputBar}>
@@ -98,8 +217,8 @@ export default function ChatScreen() {
           style={styles.input}
           value={input}
           onChangeText={setInput}
-          onFocus={() => setTyping(true)}
-          onBlur={() => setTyping(false)}
+          onFocus={() => {}}
+          onBlur={() => {}}
           placeholder="Write something…"
           placeholderTextColor="#9a9a9a"
           multiline
@@ -107,7 +226,11 @@ export default function ChatScreen() {
           numberOfLines={4}
           selectionColor="#d46a6a"
         />
-        <TouchableOpacity style={styles.sendButton} onPress={sendMessage} disabled={!input.trim()}>
+        <TouchableOpacity
+          style={styles.sendButton}
+          onPress={sendMessage}
+          disabled={!input.trim()}
+        >
           <Text style={styles.sendText}>➤</Text>
         </TouchableOpacity>
       </View>
@@ -115,44 +238,48 @@ export default function ChatScreen() {
   );
 }
 
-function MessageBubble({
-  text,
-  mine,
-  status,
-  timestamp,
-}: {
-  text: string;
-  mine: boolean;
-  status: string;
-  timestamp: number;
-}) {
-  const time = new Date(timestamp).toLocaleTimeString([], {
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-
-  return (
-    <View style={[styles.bubbleWrap, mine && styles.bubbleWrapMine]}>
-      <Animated.View style={[styles.bubble, mine && styles.bubbleMine]}>
-        <Text style={[styles.bubbleText, mine && styles.bubbleTextMine]}>
-          {text}
-        </Text>
-        <View style={styles.statusRow}>
-          <Text style={styles.statusText}>{time}</Text>
-          {status === 'sending' && (
-            <Animated.Text style={styles.statusText}>⟳</Animated.Text>
-          )}
-          {status === 'delivered' && <Text style={styles.statusText}>✓✓</Text>}
-        </View>
-      </Animated.View>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fdfaf5',
+  },
+  errorContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+    backgroundColor: '#fdfaf5',
+  },
+  errorText: {
+    fontSize: 15,
+    color: '#b3402a',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  retryButton: {
+    backgroundColor: '#b3402a',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+  },
+  retryText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fdfaf5',
+  },
+  loadingText: {
+    fontSize: 15,
+    color: '#6b6b6b',
+  },
+  pulse: {
+    animationDuration: '1.5s',
+    animationIterationCount: 'infinite',
   },
   header: {
     flexDirection: 'row',
@@ -180,13 +307,10 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#b3402a',
+    backgroundColor: '#c7c7c7',
   },
   online: {
     backgroundColor: '#7fb069',
-  },
-  offline: {
-    backgroundColor: '#c7c7c7',
   },
   partnerName: {
     fontSize: 16,
@@ -205,58 +329,9 @@ const styles = StyleSheet.create({
     paddingBottom: 100,
     gap: 10,
   },
-  bubbleWrap: {
-    alignItems: 'flex-end',
-  },
-  bubbleWrapMine: {
-    alignItems: 'flex-end',
-  },
-  bubble: {
-    maxWidth: '80%',
-    padding: 12,
-    borderRadius: 18,
-    backgroundColor: '#f5efe4',
-    borderBottomRightRadius: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
-  },
-  bubbleMine: {
-    backgroundColor: '#ffe3d6',
-    borderBottomRightRadius: 18,
-    borderBottomLeftRadius: 18,
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 4,
-  },
-  bubbleText: {
-    fontSize: 15,
-    color: '#2d2d2d',
-    lineHeight: 21,
-  },
-  bubbleTextMine: {
-    color: '#4a4a4a',
-  },
-  statusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    marginTop: 4,
-    gap: 4,
-  },
-  statusText: {
-    fontSize: 10,
-    color: '#9a9a9a',
-  },
   typingRow: {
     paddingHorizontal: 16,
     paddingTop: 4,
-  },
-  typingText: {
-    fontSize: 13,
-    color: '#8a8a8a',
-    fontStyle: 'italic',
   },
   inputBar: {
     flexDirection: 'row',

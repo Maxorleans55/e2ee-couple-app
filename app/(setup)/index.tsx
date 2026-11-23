@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator, KeyboardAvoidingView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { secureStore, KEYS_STORAGE_KEY } from '@/lib/secureStore';
-import { getSignalClient } from '@/lib/crypto';
+import { initSignalClient } from '@/lib/crypto';
 
 const RELAY_URL = 'ws://localhost:8787';
 
@@ -23,15 +23,22 @@ export default function SetupScreen() {
     })();
   }, []);
 
-  const generateKeys = async () => {
+  const initializeIdentity = async () => {
     setStatus('generating');
     setError(null);
     try {
       const getIdentityAssertion = async () => {
         return `device-identity-${Date.now()}`;
       };
-      const keys = await getSignalClient(RELAY_URL, getIdentityAssertion);
-      // registerIdentity is handled internally; we just need the client initialized
+
+      await initSignalClient({
+        relayUrl: RELAY_URL,
+        getIdentityAssertion,
+        onMessage: () => {
+          // Messages handled in chat screen
+        },
+      });
+
       const existing = await secureStore.get(KEYS_STORAGE_KEY);
       if (existing) {
         const parsed = JSON.parse(existing);
@@ -52,7 +59,7 @@ export default function SetupScreen() {
     return (
       <View style={styles.container}>
         <ActivityIndicator size="large" color="#d46a6a" />
-        <Text style={styles.loadingText}>Generating your identity keys…</Text>
+        <Text style={styles.loadingText}>Establishing your secure identity…</Text>
       </View>
     );
   }
@@ -67,7 +74,7 @@ export default function SetupScreen() {
         {status === 'idle' && (
           <TouchableOpacity
             style={styles.button}
-            onPress={generateKeys}
+            onPress={initializeIdentity}
             disabled={status === 'generating'}
           >
             <Text style={styles.buttonText}>Set Up My Identity</Text>
@@ -85,7 +92,7 @@ export default function SetupScreen() {
         {status === 'error' && error && (
           <View style={styles.errorPanel}>
             <Text style={styles.errorText}>{error}</Text>
-            <TouchableOpacity style={styles.retryButton} onPress={generateKeys}>
+            <TouchableOpacity style={styles.retryButton} onPress={initializeIdentity}>
               <Text style={styles.retryText}>Try again</Text>
             </TouchableOpacity>
           </View>
