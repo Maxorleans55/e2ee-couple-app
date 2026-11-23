@@ -2,7 +2,7 @@
 
 **Scope:** Authentication, 2-user allowlist, E2EE key storage, transport.
 **Threat model:** Two-person intimate messaging app. Adversary = network attacker, relay operator, device compromise, physical access.
-**Status:** Pre-code design review. No independent cryptographic audit performed.
+**Status:** Code review complete (step2-ui-ux branch). Signal Protocol SDK v14.7.0 API verified against installed types. No independent cryptographic audit performed.
 
 ---
 
@@ -111,3 +111,16 @@ Residual risks (ranked):
 4. **Metadata leakage** — timing/size analysis (accepted limitation; no mixnet).
 
 **Not covered:** Independent cryptographic audit, penetration testing, formal protocol verification. Do not use for high-risk threat models without professional audit.
+
+---
+
+## 7. Code-Level Findings — Implementation Review
+
+| # | Finding | Severity | Location | Mitigation |
+|---|---------|----------|----------|------------|
+| C1 | `initSignalClient` creates one shared client instance per app install; no multi-device support | Medium | `lib/crypto.ts:20` | Acceptable for 2-person single-device model |
+| C2 | `processIncomingEnvelope` returns `ProcessedReceive` with plaintext; callers must handle `pending`/`denied`/`refused` outcomes | Medium | `lib/crypto.ts:120-131` | All outcomes handled; non-`processed` throws error |
+| C3 | Safety number verification uses `client.verify()` (Signal SDK) + `confirmSafetyNumber()` out-of-band confirmation | Low | `lib/crypto.ts:134-153` | UI enforces match before confirmation |
+| C4 | WebSocket relay uses `ws` (unencrypted) locally; WSS required in production | High | `relay-server/index.ts:52` | Enforce WSS/TLS in production config |
+| C5 | Relay `allowlist.json` loaded once at startup; no runtime reloading | Low | `relay-server/index.ts:16-27` | Acceptable for static 2-person deployment |
+| C6 | `sendEncryptedMessage` returns `{ type, body }` where `body` is the `clientMessageId` — the actual ciphertext is sent over the relay separately | Low | `lib/crypto.ts:100-107` | Clear separation of Signal Protocol send result from relay transport |
