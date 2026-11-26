@@ -1,92 +1,93 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Animated, TouchableOpacity } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { fonts, radius, useTheme } from '@/lib/theme';
+import { Card, GhostButton, GradientButton } from './ui';
 
 export type SafetyNumberVerifyProps = {
-  safetyNumber: string;
-  partnerSafetyNumber: string;
+  /** The shared 60-digit safety number. It is identical on both phones. */
+  safetyNumber: string | null;
+  partnerName: string;
   isVerified: boolean;
   onVerify: (confirmed: boolean) => void;
 };
 
-export function SafetyNumberVerify({
-  safetyNumber,
-  partnerSafetyNumber,
-  isVerified,
-  onVerify,
-}: SafetyNumberVerifyProps) {
-  const [matched, setMatched] = useState(false);
-  const pulseAnim = useRef(new Animated.Value(0)).current;
+export function SafetyNumberVerify({ safetyNumber, partnerName, isVerified, onVerify }: SafetyNumberVerifyProps) {
+  const c = useTheme();
+  const pulse = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    Animated.loop(
-      Animated.timing(pulseAnim, {
-        toValue: 1,
-        duration: 1500,
-        useNativeDriver: true,
-      })
-    ).start();
-  }, []);
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 1400, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0, duration: 1400, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse]);
 
-  const formattedMine = safetyNumber.match(/.{1,5}/g)?.join(' ') ?? '';
-  const formattedTheirs = partnerSafetyNumber.match(/.{1,5}/g)?.join(' ') ?? '';
-
-  const confirm = () => {
-    setMatched(true);
-    onVerify(true);
-  };
-
-  const reject = () => {
-    onVerify(false);
-  };
+  const groups = safetyNumber?.replace(/\s/g, '').match(/.{1,5}/g) ?? [];
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Verify Safety Number</Text>
-      <Text style={styles.subtitle}>
-        Compare these numbers with your partner in person or over a trusted channel.
-      </Text>
-
-      <View style={styles.numberCard}>
-        <Text style={styles.label}>Your safety number</Text>
-        <Text style={styles.number}>{formattedMine}</Text>
-      </View>
-
-      <View style={styles.numberCard}>
-        <Text style={styles.label}>Partner&rsquo;s safety number</Text>
-        <Text style={styles.number}>{formattedTheirs}</Text>
-      </View>
-
-      <View style={styles.matchIndicator}>
+      <View style={styles.hero}>
         <Animated.View
           style={[
-            styles.matchDot,
+            styles.halo,
             {
-              opacity: pulseAnim,
-              transform: [{ scale: matched ? 1.2 : 1 }],
+              backgroundColor: isVerified ? c.sageTint : c.roseTint,
+              transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.08] }) }],
             },
           ]}
         />
-        <Text style={matched ? styles.matchText : styles.pendingText}>
-          {matched ? 'Numbers match' : 'Compare the numbers above'}
-        </Text>
+        <View style={[styles.heroIcon, { backgroundColor: c.surface }]}>
+          <Ionicons
+            name={isVerified ? 'shield-checkmark' : 'finger-print'}
+            size={34}
+            color={isVerified ? c.sage : c.rose}
+          />
+        </View>
       </View>
 
-      <View style={styles.buttonRow}>
-        <TouchableOpacity
-          style={[styles.button, styles.buttonConfirm]}
-          disabled={!matched}
-          onPress={confirm}
-        >
-          <Text style={styles.buttonText}>I confirm they match</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.buttonCancel} onPress={reject}>
-          <Text style={styles.buttonTextCancel}>These don&rsquo;t match</Text>
-        </TouchableOpacity>
-      </View>
+      <Text style={[styles.body, { color: c.inkSoft }]}>
+        Sit together, or call {partnerName}, and check that this number matches the one on their phone. If it matches,
+        nobody is listening in.
+      </Text>
 
-      {isVerified && (
-        <View style={styles.verifiedBanner}>
-          <Text style={styles.verifiedText}>✓ Identity verified — E2EE session locked</Text>
+      <Card style={styles.numberCard}>
+        {groups.length > 0 ? (
+          <View style={styles.grid}>
+            {groups.map((g, i) => (
+              <Text key={i} style={[styles.group, { color: c.ink }]}>
+                {g}
+              </Text>
+            ))}
+          </View>
+        ) : (
+          <View style={styles.pending}>
+            <Ionicons name="hourglass-outline" size={20} color={c.inkFaint} />
+            <Text style={[styles.pendingText, { color: c.inkSoft }]}>
+              Waiting for {partnerName}’s key. Once you’ve both connected, your safety number appears here.
+            </Text>
+          </View>
+        )}
+      </Card>
+
+      {isVerified ? (
+        <View style={[styles.verified, { backgroundColor: c.sageTint }]}>
+          <Ionicons name="checkmark-circle" size={18} color={c.sage} />
+          <Text style={[styles.verifiedText, { color: c.sage }]}>Verified. Your conversation is private.</Text>
+        </View>
+      ) : (
+        <View style={styles.actions}>
+          <GradientButton
+            label="They match"
+            icon="checkmark"
+            disabled={groups.length === 0}
+            onPress={() => onVerify(true)}
+          />
+          <GhostButton label="They don’t match" icon="alert-circle-outline" onPress={() => onVerify(false)} />
         </View>
       )}
     </View>
@@ -94,106 +95,24 @@ export function SafetyNumberVerify({
 }
 
 const styles = StyleSheet.create({
-  container: {
-    padding: 24,
-    backgroundColor: '#fdfaf5',
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#2d2d2d',
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#6b6b6b',
-    textAlign: 'center',
-    marginBottom: 24,
-    lineHeight: 20,
-  },
-  numberCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#e8ded4',
-  },
-  label: {
-    fontSize: 11,
-    color: '#8a8a8a',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: 8,
-  },
-  number: {
-    fontSize: 13,
-    fontFamily: 'monospace',
-    color: '#2d2d2d',
-    letterSpacing: 0.5,
-  },
-  matchIndicator: {
+  container: { gap: 22 },
+  hero: { alignItems: 'center', justifyContent: 'center', height: 120 },
+  halo: { position: 'absolute', width: 116, height: 116, borderRadius: 58 },
+  heroIcon: { width: 76, height: 76, borderRadius: 38, alignItems: 'center', justifyContent: 'center' },
+  body: { fontFamily: fonts.body, fontSize: 15, lineHeight: 23, textAlign: 'center', paddingHorizontal: 8 },
+  numberCard: { padding: 20, borderRadius: radius.xl },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 14 },
+  group: { width: '25%', textAlign: 'center', fontFamily: 'monospace', fontSize: 18, letterSpacing: 1 },
+  pending: { alignItems: 'center', gap: 10, paddingVertical: 12 },
+  pendingText: { fontFamily: fonts.body, fontSize: 14, lineHeight: 21, textAlign: 'center' },
+  actions: { gap: 10 },
+  verified: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 8,
-    marginBottom: 20,
+    padding: 14,
+    borderRadius: radius.md,
   },
-  matchDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#7fb069',
-  },
-  matchText: {
-    fontSize: 14,
-    color: '#7fb069',
-    fontWeight: '700',
-  },
-  pendingText: {
-    fontSize: 14,
-    color: '#8a8a8a',
-  },
-  buttonRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  button: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 14,
-    alignItems: 'center',
-  },
-  buttonConfirm: {
-    backgroundColor: matched ? '#7fb069' : '#c7c7c7',
-  },
-  buttonCancel: {
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: '#c7c7c7',
-  },
-  buttonText: {
-    color: '#ffffff',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  buttonTextCancel: {
-    color: '#8a8a8a',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  verifiedBanner: {
-    marginTop: 16,
-    backgroundColor: '#e8f5e9',
-    borderRadius: 12,
-    padding: 12,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#c8e6c9',
-  },
-  verifiedText: {
-    color: '#2e7d32',
-    fontSize: 13,
-    fontWeight: '700',
-  },
+  verifiedText: { fontFamily: fonts.bold, fontSize: 14 },
 });

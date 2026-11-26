@@ -1,25 +1,53 @@
+import { useEffect } from 'react';
 import { Stack } from 'expo-router';
-import { useColorScheme } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import * as SplashScreen from 'expo-splash-screen';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import {
+  useFonts,
+  Fraunces_400Regular_Italic,
+  Fraunces_600SemiBold,
+} from '@expo-google-fonts/fraunces';
+import {
+  PlusJakartaSans_400Regular,
+  PlusJakartaSans_500Medium,
+  PlusJakartaSans_600SemiBold,
+  PlusJakartaSans_700Bold,
+} from '@expo-google-fonts/plus-jakarta-sans';
+import { useTheme } from '@/lib/theme';
+
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
+  const c = useTheme();
+  const [loaded] = useFonts({
+    Fraunces_400Regular_Italic,
+    Fraunces_600SemiBold,
+    PlusJakartaSans_400Regular,
+    PlusJakartaSans_500Medium,
+    PlusJakartaSans_600SemiBold,
+    PlusJakartaSans_700Bold,
+  });
+
+  useEffect(() => {
+    if (loaded) SplashScreen.hideAsync().catch(() => {});
+  }, [loaded]);
+
+  if (!loaded) return null;
 
   return (
-    <Stack>
-      <Stack.Screen
-        options={{
+    <SafeAreaProvider>
+      <StatusBar style={c.mode === 'dark' ? 'light' : 'dark'} />
+      <Stack
+        screenOptions={{
           headerShown: false,
-          statusBarStyle:
-            colorScheme === 'dark' ? 'light-content' : 'dark-content',
+          contentStyle: { backgroundColor: c.bg },
+          animation: 'fade',
         }}
       >
-        <Stack.Group screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="(setup)" />
-          <Stack.Screen name="(chat)" />
-        </Stack.Group>
-      </Stack.Screen>
-      <StatusBar style="auto" />
-    </Stack>
+        <Stack.Screen name="(setup)" />
+        <Stack.Screen name="(chat)" />
+      </Stack>
+    </SafeAreaProvider>
   );
 }

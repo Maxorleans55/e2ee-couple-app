@@ -1,16 +1,7 @@
 import { Stack } from 'expo-router';
+import { useTheme } from '@/lib/theme';
 
 export default function SetupLayout() {
-  return (
-    <Stack>
-      <Stack.Screen
-        options={{
-          headerShown: false,
-          title: 'Setup',
-        }}
-      >
-        <Stack.Screen name="(setup)/index" />
-      </Stack.Screen>
-    </Stack>
-  );
+  const c = useTheme();
+  return <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: c.bg } }} />;
 }

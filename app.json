@@ -5,11 +5,6 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
-    "splash": {
-      "image": "./assets/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#fdfaf5"
-    },
     "ios": {
       "supportsTablet": false,
       "infoPlist": {
@@ -19,26 +14,42 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#fdfaf5"
+        "backgroundColor": "#FBF5EF"
       },
       "permissions": []
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro",
+      "output": "single"
     },
     "plugins": [
+      "expo-router",
+      "expo-font",
       [
         "expo-secure-store",
         {
           "configureAndroidKeyStore": true
         }
       ],
-      "react-native-get-random-values"
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash.png",
+          "imageWidth": 200,
+          "backgroundColor": "#FBF5EF",
+          "dark": {
+            "backgroundColor": "#150F17"
+          }
+        }
+      ]
     ],
     "extra": {
       "e2e": {
         "allowlistPath": "./relay-server/allowlist.json"
       }
-    }
+    },
+    "icon": "./assets/icon.png",
+    "scheme": "ustwo"
   }
 }
