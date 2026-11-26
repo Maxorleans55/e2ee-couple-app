@@ -29,7 +29,8 @@ export function Backdrop({ children, style }: { children: React.ReactNode; style
         style={StyleSheet.absoluteFill}
         pointerEvents="none"
       />
-      {children}
+      {/* Keep a phone-sized column on tablets and desktop browsers. */}
+      <View style={styles.column}>{children}</View>
     </View>
   );
 }
@@ -271,6 +272,7 @@ export function makeStyles<T extends StyleSheet.NamedStyles<T>>(fn: (c: Palette)
 }
 
 const styles = StyleSheet.create({
+  column: { flex: 1, width: '100%', maxWidth: 520, alignSelf: 'center' },
   gradientBtn: {
     height: 56,
     borderRadius: radius.md,

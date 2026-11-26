@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { secureStore, KEYS_STORAGE_KEY } from '@/lib/secureStore';
 import { getSignalClient } from '@/lib/crypto';
 import { RELAY_URL } from '@/lib/relay';
+import { friendlyKeyError, keySupport } from '@/lib/platform';
 import { fonts, radius, useTheme } from '@/lib/theme';
 import { Backdrop, Card, GhostButton, GradientButton, LogoMark, Pill } from '@/components/ui';
 
@@ -15,7 +16,9 @@ export default function SetupScreen() {
   const router = useRouter();
   const c = useTheme();
   const [status, setStatus] = useState<Status>('idle');
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ReturnType<typeof friendlyKeyError> | null>(null);
+  const [showDetail, setShowDetail] = useState(false);
+  const support = keySupport();
   const [publicKey, setPublicKey] = useState<string | null>(null);
 
   const enter = useRef(new Animated.Value(0)).current;
@@ -59,7 +62,8 @@ export default function SetupScreen() {
       if (existing) setPublicKey(JSON.parse(existing).identityPublicKey);
       setStatus('ready');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong while creating your keys.');
+      setError(friendlyKeyError(err));
+      setShowDetail(false);
       setStatus('error');
     }
   };
@@ -120,13 +124,41 @@ export default function SetupScreen() {
                   <Ionicons name="alert-circle" size={18} color={c.danger} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.keyTitle, { color: c.ink }]}>Couldn’t create your keys</Text>
-                  <Text style={[styles.keySub, { color: c.inkSoft }]} numberOfLines={3}>
-                    {error}
+                  <Text style={[styles.keyTitle, { color: c.ink }]}>{error?.title}</Text>
+                  <Text style={[styles.keySub, { color: c.inkSoft }]}>{error?.body}</Text>
+                </View>
+              </View>
+              {showDetail && (
+                <View style={[styles.keyBox, { backgroundColor: c.surfaceAlt }]}>
+                  <Text style={[styles.keyLabel, { color: c.inkFaint }]}>DETAILS</Text>
+                  <Text selectable style={[styles.detail, { color: c.inkSoft }]}>
+                    {error?.detail}
+                  </Text>
+                </View>
+              )}
+              <GradientButton label="Try again" icon="refresh" onPress={generateKeys} />
+              <GhostButton
+                label={showDetail ? 'Hide details' : 'Show details'}
+                icon={showDetail ? 'chevron-up' : 'code-slash-outline'}
+                onPress={() => setShowDetail((v) => !v)}
+              />
+            </Card>
+          ) : !support.ok ? (
+            <Card style={styles.keyCard}>
+              <View style={styles.keyHeader}>
+                <View style={[styles.keyIcon, { backgroundColor: c.roseTint }]}>
+                  <Ionicons name="phone-portrait-outline" size={18} color={c.rose} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.keyTitle, { color: c.ink }]}>Set up on your phone</Text>
+                  <Text style={[styles.keySub, { color: c.inkSoft }]}>
+                    {support.reason === 'web'
+                      ? 'Your keys live in your phone’s encrypted storage, which a browser doesn’t have. Install UsTwo on your phone to create them.'
+                      : 'Expo Go can’t encrypt the key database. Run a development build (npx expo run:android or run:ios) to create your keys.'}
                   </Text>
                 </View>
               </View>
-              <GradientButton label="Try again" icon="refresh" onPress={generateKeys} />
+              <GradientButton label="Preview the app" icon="eye-outline" onPress={() => router.push('/chat')} />
             </Card>
           ) : (
             <>
@@ -171,6 +203,7 @@ const styles = StyleSheet.create({
   keySub: { fontFamily: fonts.body, fontSize: 13, marginTop: 2 },
   keyBox: { borderRadius: radius.md, padding: 14 },
   keyLabel: { fontFamily: fonts.bold, fontSize: 10.5, letterSpacing: 1.4, marginBottom: 6 },
+  detail: { fontFamily: 'monospace', fontSize: 12, lineHeight: 18 },
   keyValue: { fontFamily: 'monospace', fontSize: 14, letterSpacing: 0.5, lineHeight: 21 },
 });
 
