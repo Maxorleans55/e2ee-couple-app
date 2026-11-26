@@ -1,44 +1,64 @@
 import React, { useEffect, useRef } from 'react';
-import { View, StyleSheet, Animated } from 'react-native';
+import { Animated, Easing, StyleSheet, View } from 'react-native';
+import { useTheme, elevation } from '@/lib/theme';
 
+/** Three softly bouncing dots inside a "their" bubble. */
 export function TypingIndicator() {
-  const dot1 = useRef(new Animated.Value(0)).current;
-  const dot2 = useRef(new Animated.Value(0)).current;
-  const dot3 = useRef(new Animated.Value(0)).current;
+  const c = useTheme();
+  const dots = [useRef(new Animated.Value(0)).current, useRef(new Animated.Value(0)).current, useRef(new Animated.Value(0)).current];
 
   useEffect(() => {
-    Animated.sequence([
-      Animated.delay(0, Animated.timing(dot1, { toValue: 1, duration: 400, useNativeDriver: true })),
-      Animated.delay(200, Animated.timing(dot2, { toValue: 1, duration: 400, useNativeDriver: true })),
-      Animated.delay(400, Animated.timing(dot3, { toValue: 1, duration: 400, useNativeDriver: true })),
-      Animated.delay(600, Animated.timing(dot1, { toValue: 0, duration: 400, useNativeDriver: true })),
-      Animated.delay(800, Animated.timing(dot2, { toValue: 0, duration: 400, useNativeDriver: true })),
-      Animated.delay(1000, Animated.timing(dot3, { toValue: 0, duration: 400, useNativeDriver: true })),
-    ]).start(() => {
-      // loop
-    });
+    const loops = dots.map((d, i) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(i * 160),
+          Animated.timing(d, { toValue: 1, duration: 320, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+          Animated.timing(d, { toValue: 0, duration: 320, easing: Easing.in(Easing.quad), useNativeDriver: true }),
+          Animated.delay((2 - i) * 160 + 200),
+        ])
+      )
+    );
+    loops.forEach((l) => l.start());
+    return () => loops.forEach((l) => l.stop());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
-    <View style={styles.container}>
-      <Animated.View style={[styles.dot, { transform: [{ scaleY: dot1 }] }]} />
-      <Animated.View style={[styles.dot, { transform: [{ scaleY: dot2 }] }]} />
-      <Animated.View style={[styles.dot, { transform: [{ scaleY: dot3 }] }]} />
+    <View style={styles.row}>
+      <View
+        style={[
+          styles.bubble,
+          { backgroundColor: c.bubbleTheirs, borderColor: c.line, borderWidth: c.mode === 'light' ? 1 : 0 },
+          elevation(c, 1),
+        ]}
+      >
+        {dots.map((d, i) => (
+          <Animated.View
+            key={i}
+            style={[
+              styles.dot,
+              {
+                backgroundColor: c.rose,
+                opacity: d.interpolate({ inputRange: [0, 1], outputRange: [0.35, 1] }),
+                transform: [{ translateY: d.interpolate({ inputRange: [0, 1], outputRange: [0, -4] }) }],
+              },
+            ]}
+          />
+        ))}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  row: { flexDirection: 'row', paddingHorizontal: 16, marginTop: 10 },
+  bubble: {
     flexDirection: 'row',
-    gap: 4,
-    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 22,
+    borderBottomLeftRadius: 6,
   },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#9a9a9a',
-    transform: [{ scaleY: 0.5 }],
-  },
+  dot: { width: 7, height: 7, borderRadius: 3.5 },
 });

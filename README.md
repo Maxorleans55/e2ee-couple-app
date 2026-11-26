@@ -6,14 +6,14 @@ A private, end-to-end encrypted React Native (Expo + TypeScript) mobile app desi
 
 | Layer | Technology |
 |-------|------------|
-| Framework | Expo SDK 52, React Native 0.79, TypeScript strict |
+| Framework | Expo SDK 55, React Native 0.83, TypeScript strict |
 | Navigation | Expo Router |
 | State | Zustand |
 | Crypto | Signal Protocol (X3DH + Double Ratchet) via `@open-e2ee/signal-protocol-sdk` |
 | Key storage | `expo-secure-store` (iOS Keychain / Android Keystore) |
 | Local DB | `expo-sqlite` + SQLCipher |
 | Transport | Minimal WebSocket relay with 2-user allowlist |
-| UI | Custom warm theme, motion-design micro-interactions |
+| UI | Shared theme (`lib/theme.ts`) with light/dark palettes, Fraunces + Plus Jakarta Sans, gradient accents, spring micro-interactions |
 
 ## Project Structure
 
@@ -39,7 +39,6 @@ SECURITY_AUDIT.md  # Adversarial audit findings
 ### Install
 
 ```bash
-cd C:\e2ee-couple-app
 npm install
 ```
 
@@ -59,11 +58,18 @@ npm start
 ### Start the app
 
 ```bash
-cd C:\e2ee-couple-app
 npx expo start
 ```
 
 Scan the QR code with Expo Go on your phone.
+
+### Design preview with sample data
+
+```bash
+EXPO_PUBLIC_DEMO=1 npx expo start --clear
+```
+
+This fills the chat with a sample conversation and a sample safety number so you can review the UI. Leave it unset for real use.
 
 ## Security
 
