@@ -98,7 +98,7 @@ export default function ChatScreen() {
         <View
           style={[
             styles.header,
-            { paddingTop: insets.top + 8, backgroundColor: c.bg + 'EE', borderBottomColor: c.line },
+            { paddingTop: insets.top + 8, borderBottomColor: c.line },
           ]}
         >
           <Avatar name={partnerName} size={44} online={partnerOnline} />

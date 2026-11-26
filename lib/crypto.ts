@@ -17,17 +17,18 @@ export interface CryptoClient {
   getSafetyNumber(peerUserId: string): Promise<string>;
 }
 
-let signalClient: ReturnType<typeof createHostedSignalProtocolClient> | null =
-  null;
+type SignalClient = Awaited<ReturnType<typeof createHostedSignalProtocolClient>>;
+
+let signalClient: SignalClient | null = null;
 
 export async function getSignalClient(
   relayUrl: string,
   getIdentityAssertion: () => Promise<string>
-): Promise<ReturnType<typeof createHostedSignalProtocolClient>> {
+): Promise<SignalClient> {
   if (signalClient) return signalClient;
 
   const storage = await expoStore();
-  signalClient = createHostedSignalProtocolClient({
+  signalClient = await createHostedSignalProtocolClient({
     hosted: { relayUrl, getIdentityAssertion },
     adapters: { storage },
   });
@@ -65,7 +66,7 @@ export async function registerIdentity(
 }
 
 export async function sendEncryptedMessage(
-  client: ReturnType<typeof createHostedSignalProtocolClient>,
+  client: SignalClient,
   recipientUserId: string,
   plaintext: string
 ) {
@@ -73,7 +74,7 @@ export async function sendEncryptedMessage(
 }
 
 export async function decryptIncomingMessage(
-  client: ReturnType<typeof createHostedSignalProtocolClient>,
+  client: SignalClient,
   senderUserId: string,
   type: string,
   body: string
@@ -82,7 +83,7 @@ export async function decryptIncomingMessage(
 }
 
 export async function getSafetyNumber(
-  client: ReturnType<typeof createHostedSignalProtocolClient>,
+  client: SignalClient,
   peerUserId: string
 ): Promise<string> {
   return client.getSafetyNumber(peerUserId);
